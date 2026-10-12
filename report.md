@@ -95,18 +95,115 @@ The size of 24 bytes = 23 characters of "Hello operating systems" + 1 newline ad
 ---
 
 ## Part 2. Processes
-
-I did not capture the output of the `ps aux`, `top`, `jobs` and `/proc/<pid>/status` commands of this part, so I do not report numbers I did not see. The only process evidence I have comes from Part 3: a background `sleep 300 &` got PID 4506, the shell reported it as job `[1]`, and `kill` ended it:
-
+ 
+### Commands run
+ 
 ```
-$ sleep 300 & PID=$!
-[1] 4506
+$ ps aux | head
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  0.6  0.4  26940 17748 ?        Ss   13:12   0:00 /usr/lib/systemd/systemd --switched-root --system --deserialize=51
+root           2  0.0  0.0      0     0 ?        S    13:12   0:00 [kthreadd]
+root           3  0.0  0.0      0     0 ?        S    13:12   0:00 [pool_workqueue_release]
+root           4  0.0  0.0      0     0 ?        I<   13:12   0:00 [kworker/R-rcu_gp]
+root           5  0.0  0.0      0     0 ?        I<   13:12   0:00 [kworker/R-sync_wq]
+root           6  0.0  0.0      0     0 ?        I<   13:12   0:00 [kworker/R-kvfree_rcu_reclaim]
+root           7  0.0  0.0      0     0 ?        I<   13:12   0:00 [kworker/R-slub_flushwq]
+root           8  0.0  0.0      0     0 ?        I<   13:12   0:00 [kworker/R-netns]
+root           9  0.0  0.0      0     0 ?        I    13:12   0:00 [kworker/0:0-cgroup_free]
+ 
+$ ps aux | wc -l
+216
+ 
+$ top
+top - 13:14:37 up 2 min,  1 user,  load average: 0.06, 0.09, 0.04
+Tasks: 214 total,   1 running, 213 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  7.0 us,  1.6 sy,  0.0 ni, 90.7 id,  0.0 wa,  0.0 hi,  0.7 si,  0.0 st
+MiB Mem :  4258.8 total,   770.3 free,  2172.5 used,  1493.0 buff/cache
+MiB Swap:     0.0 total,     0.0 free,     0.0 used.  2086.4 avail Mem
+ 
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+   3795 vboxuser  20   0 2907272 474328 133956 S  24.6  10.9   0:02.70 ptyxis
+   2777 vboxuser  20   0 5047492 427016 156644 S  10.0   9.8   0:04.89 gnome-shell
+    891 root      20   0       0      0      0 I   2.0   0.0   0:00.19 kworker/u16:8-events_unbound
+   3976 vboxuser  20   0   12844   5416   3388 R   0.3   0.1   0:00.02 top
+      1 root      20   0   26940  17748  10940 S   0.0   0.4   0:00.71 systemd
+    ...
+ 
+$ sleep 300 &
+[2] 4098
+$ jobs
+[1]-  Running                 sleep 300 &
+[2]+  Running                 sleep 300 &
+$ ps -ef | grep sleep
+vboxuser    3979    3875  0 13:14 pts/0    00:00:00 sleep 300
+vboxuser    4098    3875  0 13:19 pts/0    00:00:00 sleep 300
+vboxuser    4128    3875  0 13:19 pts/0    00:00:00 grep --color=auto sleep
+$ kill 4098
+[1]-  Done                    sleep 300
+[2]+  Terminated              sleep 300
+ 
+$ sleep 300 &
+[1] 4137
+$ PID=$!
+$ ls /proc/$PID/
+attr  autogroup  auxv  cgroup  clear_refs  cmdline  comm  coredump_filter  cwd  environ  exe  fd  fdinfo
+gid_map  io  ksm_merging_pages  ksm_stat  latency  limits  loginuid  map_files  maps  mem  mountinfo
+mounts  mountstats  net  ns  numa_maps  oom_adj  oom_score  oom_score_adj  pagemap  patch_state
+personality  projid_map  root  sched  schedstat  sessionid  setgroups  smaps  smaps_rollup  stack  stat
+statm  status  syscall  task  timens_offsets  timers  timerslack_ns  uid_map  wchan
+$ cat /proc/$PID/status | head -20
+Name:   sleep
+Umask:  0002
+State:  S (sleeping)
+Tgid:   4137
+Ngid:   0
+Pid:    4137
+PPid:   3875
+TracerPid:      0
+Uid:    1000    1000    1000    1000
+Gid:    1000    1000    1000    1000
+FDSize: 256
+Groups: 4 24 27 30 46 100 111 114 1000
+NStgid: 4137
+NSpid:  4137
+NSpgid: 4137
+NSsid:  3875
+Kthread:        0
+VmPeak:    15924 kB
+VmSize:    15924 kB
+VmLck:         0 kB
 $ kill $PID
 [1]+  Terminated              sleep 300
 ```
-
-The answers to the three "Observe" questions of this part (PID 1, process count, `State:` line) will be added once the commands have been run and captured.
-
+ 
+![ps aux | head and ps aux | wc -l](images/07-ps-aux.png)
+ 
+![top](images/08-top.png)
+ 
+![sleep, jobs, ps -ef and kill](images/09-sleep-jobs-kill.png)
+ 
+![/proc/PID listing and status](images/10-proc-status.png)
+ 
+### Observe
+ 
+1. **PID 1.** Process number 1 is **`systemd`** (`/usr/lib/systemd/systemd --switched-root --system ...`), owned by root. It is the first user-space process started by the kernel at boot; it starts and supervises all the other services, and every other process descends from it. The processes in square brackets with low PIDs (`kthreadd`, `kworker/...`) are not programs but threads of the kernel itself.
+2. **Number of processes on the idle VM.** About **215**: `ps aux | wc -l` printed 216 lines, one of which is the header, and `top` counted 214 tasks (1 running, 213 sleeping, 0 stopped, 0 zombie) a moment earlier. The CPU was 90.7% idle, so the OS was juggling more than 200 processes while almost none of them was actually running.
+3. **`State:` of the sleeping process.** `State: S (sleeping)`. The process is alive but waiting for a timer (`sleep 300`), so it uses no CPU and the scheduler skips it until the time is up. Its parent (`PPid: 3875`) is my shell, and it runs with my user ID 1000.
+### Interesting output
+ 
+`jobs` and `ps -ef` after the second `sleep 300 &`:
+ 
+```
+[1]-  Running                 sleep 300 &
+[2]+  Running                 sleep 300 &
+vboxuser    3979    3875  0 13:14 pts/0    00:00:00 sleep 300
+vboxuser    4098    3875  0 13:19 pts/0    00:00:00 sleep 300
+```
+ 
+Both sleeps have the same parent, 3875 (my bash), but different PIDs. The first one (PID 3979, started at 13:14) was still running because I had started it earlier. After `kill 4098`, the shell reported job `[2]` as `Terminated` (it was stopped by my signal) and job `[1]` as `Done` (its 300 seconds had simply run out, since 13:14 + 5 min = 13:19). So the OS creates a process, keeps track of its parent and its state, and tells the parent how it ended.
+ 
+Also, `ls /proc/<PID>/` shows that the kernel exposes the data of a running process (`status`, `cmdline`, `maps`, `fd`, ...) as files, even though nothing of this is stored on the disk.
+ 
 ---
 
 ## Part 3. Memory
